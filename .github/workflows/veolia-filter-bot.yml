@@ -1,0 +1,49 @@
+name: Veolia Jur filter bot
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: veolia-filter-bot
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: telegram-filter-bot
+        run: pip install -r requirements.txt
+
+      - name: Poll VeoliaJur channel
+        working-directory: telegram-filter-bot
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+          SOURCE_CHANNEL: ${{ vars.SOURCE_CHANNEL }}
+          TARGET_CHAT: ${{ vars.TARGET_CHAT }}
+          KEYWORDS: ${{ vars.KEYWORDS }}
+        run: python poll.py
+
+      - name: Persist updated state
+        working-directory: telegram-filter-bot
+        run: |
+          if [ -n "$(git status --porcelain -- state.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "chore: update veolia-filter-bot state [skip ci]"
+            git push
+          fi
